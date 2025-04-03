@@ -19,6 +19,20 @@ const (
 	NodeStateLeader
 )
 
+// String returns the string representation of the node state
+func (s NodeState) String() string {
+	switch s {
+	case NodeStateFollower:
+		return "FOLLOWER"
+	case NodeStateCandidate:
+		return "CANDIDATE"
+	case NodeStateLeader:
+		return "LEADER"
+	default:
+		return "UNKNOWN"
+	}
+}
+
 // Node represents a node in the distributed system
 type Node struct {
 	ID        NodeID
