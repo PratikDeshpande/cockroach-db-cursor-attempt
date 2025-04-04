@@ -3,7 +3,9 @@ package sql
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
+	"time"
 
 	"cockroach-db-cursor-attempt/internal/storage"
 	"cockroach-db-cursor-attempt/internal/transaction"
@@ -128,7 +130,7 @@ func (e *Executor) executeDropTable(ctx context.Context, txn *transaction.Transa
 // executeInsert inserts data into a table
 func (e *Executor) executeInsert(ctx context.Context, txn *transaction.Transaction, stmt *Statement) error {
 	e.schemasMu.RLock()
-	schema, exists := e.schemas[stmt.Table]
+	_, exists := e.schemas[stmt.Table]
 	e.schemasMu.RUnlock()
 
 	if !exists {
@@ -150,7 +152,7 @@ func (e *Executor) executeInsert(ctx context.Context, txn *transaction.Transacti
 // executeSelect retrieves data from a table
 func (e *Executor) executeSelect(ctx context.Context, txn *transaction.Transaction, stmt *Statement) error {
 	e.schemasMu.RLock()
-	schema, exists := e.schemas[stmt.Table]
+	_, exists := e.schemas[stmt.Table]
 	e.schemasMu.RUnlock()
 
 	if !exists {
@@ -174,7 +176,7 @@ func (e *Executor) executeSelect(ctx context.Context, txn *transaction.Transacti
 // executeUpdate updates data in a table
 func (e *Executor) executeUpdate(ctx context.Context, txn *transaction.Transaction, stmt *Statement) error {
 	e.schemasMu.RLock()
-	schema, exists := e.schemas[stmt.Table]
+	_, exists := e.schemas[stmt.Table]
 	e.schemasMu.RUnlock()
 
 	if !exists {
@@ -198,7 +200,7 @@ func (e *Executor) executeUpdate(ctx context.Context, txn *transaction.Transacti
 // executeDelete deletes data from a table
 func (e *Executor) executeDelete(ctx context.Context, txn *transaction.Transaction, stmt *Statement) error {
 	e.schemasMu.RLock()
-	schema, exists := e.schemas[stmt.Table]
+	_, exists := e.schemas[stmt.Table]
 	e.schemasMu.RUnlock()
 
 	if !exists {
