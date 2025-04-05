@@ -13,9 +13,9 @@ import (
 
 // Executor represents the SQL execution engine
 type Executor struct {
-	storage  storage.Engine
-	txns     *transaction.TransactionManager
-	schemas  map[string]*TableSchema
+	storage   storage.Engine
+	txns      *transaction.TransactionManager
+	schemas   map[string]*TableSchema
 	schemasMu sync.RWMutex
 }
 
@@ -103,10 +103,23 @@ func (e *Executor) executeCreateTable(ctx context.Context, txn *transaction.Tran
 			return fmt.Errorf("invalid column definition: %s", col)
 		}
 
+		// Extract column name and type
+		name := parts[0]
+		dataType := parts[1]
+
+		// Check for additional constraints
+		nullable := true
+		for j := 2; j < len(parts); j++ {
+			if strings.ToLower(parts[j]) == "not" && j+1 < len(parts) && strings.ToLower(parts[j+1]) == "null" {
+				nullable = false
+				break
+			}
+		}
+
 		schema.Columns[i] = Column{
-			Name:     parts[0],
-			Type:     parts[1],
-			Nullable: strings.Contains(strings.ToLower(col), "nullable"),
+			Name:     name,
+			Type:     dataType,
+			Nullable: nullable,
 		}
 	}
 
@@ -223,4 +236,4 @@ func (e *Executor) executeDelete(ctx context.Context, txn *transaction.Transacti
 	}
 
 	return nil
-} 
+}

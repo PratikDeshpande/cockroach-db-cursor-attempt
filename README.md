@@ -45,6 +45,18 @@ This project implements a distributed transactional database based on the Cockro
 3. Run `go mod download` to fetch dependencies
 4. Run `go build ./...` to build all components
 
+# Create a table
+curl -X POST http://localhost:8080/execute -d '{"query": "CREATE TABLE users (id INT, name VARCHAR(255))"}'
+
+# Insert data
+curl -X POST http://localhost:8080/execute -d '{"query": "INSERT INTO users (id, name) VALUES (1, \"John\")"}'
+
+# Query data
+curl -X POST http://localhost:8080/execute -d '{"query": "SELECT * FROM users"}'
+
+# Check health
+curl http://localhost:8080/health
+
 ## Development Status
 
 This is a work in progress. Currently implementing core components of the distributed database system. 
