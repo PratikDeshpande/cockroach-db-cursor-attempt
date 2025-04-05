@@ -196,21 +196,59 @@ func (p *Parser) parseDelete() (*Statement, error) {
 // parseCreateTable parses a CREATE TABLE statement
 func (p *Parser) parseCreateTable() (*Statement, error) {
 	// This is a very basic implementation
-	parts := strings.Fields(p.query)
-	if len(parts) < 4 {
-		return nil, fmt.Errorf("invalid CREATE TABLE statement")
+	// In a real implementation, you would use a proper SQL parser
+	query := p.query
+
+	// Extract table name
+	tableNameStart := strings.Index(strings.ToLower(query), "create table") + len("create table")
+	if tableNameStart == -1 {
+		return nil, fmt.Errorf("invalid CREATE TABLE statement: missing table name")
 	}
 
-	table := parts[2]
-	columns := strings.Split(strings.Trim(parts[3], "()"), ",")
+	// Find the opening parenthesis
+	parenStart := strings.Index(query[tableNameStart:], "(")
+	if parenStart == -1 {
+		return nil, fmt.Errorf("invalid CREATE TABLE statement: missing column definitions")
+	}
 
-	for i := range columns {
-		columns[i] = strings.TrimSpace(columns[i])
+	// Extract table name
+	tableName := strings.TrimSpace(query[tableNameStart : tableNameStart+parenStart])
+
+	// Find the closing parenthesis
+	parenEnd := strings.LastIndex(query, ")")
+	if parenEnd == -1 {
+		return nil, fmt.Errorf("invalid CREATE TABLE statement: missing closing parenthesis")
+	}
+
+	// Extract column definitions
+	columnDefs := query[tableNameStart+parenStart+1 : parenEnd]
+
+	// Split by comma, but be careful with commas inside parentheses
+	columns := []string{}
+	currentCol := ""
+	parenCount := 0
+
+	for _, char := range columnDefs {
+		if char == '(' {
+			parenCount++
+		} else if char == ')' {
+			parenCount--
+		} else if char == ',' && parenCount == 0 {
+			columns = append(columns, strings.TrimSpace(currentCol))
+			currentCol = ""
+			continue
+		}
+		currentCol += string(char)
+	}
+
+	// Add the last column
+	if strings.TrimSpace(currentCol) != "" {
+		columns = append(columns, strings.TrimSpace(currentCol))
 	}
 
 	return &Statement{
 		Type:    StatementTypeCreateTable,
-		Table:   table,
+		Table:   tableName,
 		Columns: columns,
 	}, nil
 }
@@ -238,4 +276,4 @@ func convertValues(values []string) []interface{} {
 		result[i] = v
 	}
 	return result
-} 
+}
