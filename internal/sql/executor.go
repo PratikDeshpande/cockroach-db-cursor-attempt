@@ -2,6 +2,7 @@ package sql
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -157,15 +158,34 @@ func (e *Executor) executeInsert(ctx context.Context, txn *transaction.Transacti
 
 	// Create a key for the row
 	key := storage.Key(fmt.Sprintf("%s:%d", stmt.Table, time.Now().UnixNano()))
-	value := storage.Value(fmt.Sprintf("%v", stmt.Values))
 
-	return e.storage.Put(ctx, key, value, txn.Timestamp)
+	// Create a map of column names to values
+	rowData := make(map[string]interface{})
+	for i, col := range stmt.Columns {
+		rowData[col] = stmt.Values[i]
+	}
+
+	// Convert the row data to JSON for storage
+	valueBytes, err := json.Marshal(rowData)
+	if err != nil {
+		return fmt.Errorf("failed to marshal row data: %v", err)
+	}
+
+	value := storage.Value(valueBytes)
+	fmt.Printf("Executor.executeInsert: inserting row with key=%s, value=%s\n", key, value)
+
+	err = e.storage.Put(ctx, key, value, txn.Timestamp)
+	if err != nil {
+		return fmt.Errorf("failed to store row: %v", err)
+	}
+	fmt.Printf("Executor.executeInsert: successfully stored row\n")
+	return nil
 }
 
 // executeSelect retrieves data from a table
 func (e *Executor) executeSelect(ctx context.Context, txn *transaction.Transaction, stmt *Statement) error {
 	e.schemasMu.RLock()
-	_, exists := e.schemas[stmt.Table]
+	schema, exists := e.schemas[stmt.Table]
 	e.schemasMu.RUnlock()
 
 	if !exists {
@@ -174,15 +194,75 @@ func (e *Executor) executeSelect(ctx context.Context, txn *transaction.Transacti
 
 	// Create a key prefix for the table
 	prefix := storage.Key(stmt.Table + ":")
+	fmt.Printf("Executor.executeSelect: scanning table %s with prefix %s\n", stmt.Table, prefix)
+
 	iter := e.storage.Scan(ctx, prefix, nil, txn.Timestamp)
 	defer iter.Close()
 
-	for iter.Valid() {
-		// Process the row
-		// In a real implementation, you would parse the value and filter based on WHERE clause
-		iter.Next()
+	// Print header
+	if len(stmt.Columns) == 1 && stmt.Columns[0] == "*" {
+		// For SELECT *, use all columns from schema
+		header := make([]string, len(schema.Columns))
+		for i, col := range schema.Columns {
+			header[i] = col.Name
+		}
+		fmt.Printf("| %s |\n", strings.Join(header, " | "))
+		fmt.Printf("|%s|\n", strings.Repeat("---|", len(header)))
+	} else {
+		fmt.Printf("| %s |\n", strings.Join(stmt.Columns, " | "))
+		fmt.Printf("|%s|\n", strings.Repeat("---|", len(stmt.Columns)))
 	}
 
+	// Process each row
+	rowCount := 0
+
+	// Initialize iterator to first position
+	if !iter.Next() {
+		fmt.Printf("Executor.executeSelect: no rows found\n")
+		return nil
+	}
+
+	for iter.Valid() {
+		key := iter.Key()
+		value := iter.Value()
+		fmt.Printf("Executor.executeSelect: processing row with key=%s, value=%s\n", key, value)
+
+		var rowData map[string]interface{}
+		if err := json.Unmarshal(value, &rowData); err != nil {
+			fmt.Printf("Error unmarshaling row: %v\n", err)
+			if !iter.Next() {
+				break
+			}
+			continue
+		}
+
+		fmt.Printf("Executor.executeSelect: unmarshaled row data=%v\n", rowData)
+
+		// Print row data
+		if len(stmt.Columns) == 1 && stmt.Columns[0] == "*" {
+			// For SELECT *, print all columns
+			values := make([]string, len(schema.Columns))
+			for i, col := range schema.Columns {
+				values[i] = fmt.Sprintf("%v", rowData[col.Name])
+			}
+			fmt.Printf("| %s |\n", strings.Join(values, " | "))
+		} else {
+			// Print only requested columns
+			values := make([]string, len(stmt.Columns))
+			for i, col := range stmt.Columns {
+				values[i] = fmt.Sprintf("%v", rowData[col])
+			}
+			fmt.Printf("| %s |\n", strings.Join(values, " | "))
+		}
+		rowCount++
+
+		// Move to next row
+		if !iter.Next() {
+			break
+		}
+	}
+
+	fmt.Printf("Executor.executeSelect: found %d rows\n", rowCount)
 	return nil
 }
 

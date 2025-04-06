@@ -73,27 +73,29 @@ func (p *Parser) Parse() (*Statement, error) {
 
 // parseSelect parses a SELECT statement
 func (p *Parser) parseSelect() (*Statement, error) {
-	// This is a very basic implementation
-	// In a real implementation, you would parse the full SELECT syntax
-	parts := strings.Fields(p.query)
-	if len(parts) < 4 {
-		return nil, fmt.Errorf("invalid SELECT statement")
+	query := p.query
+
+	// Find the FROM keyword
+	fromStart := strings.Index(strings.ToLower(query), "from")
+	if fromStart == -1 {
+		return nil, fmt.Errorf("invalid SELECT statement: missing FROM keyword")
 	}
 
-	// Extract columns
-	columns := strings.Split(strings.Trim(parts[1], "()"), ",")
-	for i := range columns {
-		columns[i] = strings.TrimSpace(columns[i])
-	}
-
-	// Extract table name
-	table := ""
-	for i, part := range parts {
-		if part == "from" && i+1 < len(parts) {
-			table = parts[i+1]
-			break
+	// Extract columns (everything between SELECT and FROM)
+	columnsStr := strings.TrimSpace(query[6:fromStart])
+	var columns []string
+	if columnsStr == "*" {
+		// For SELECT *, we'll get the columns from the table schema later
+		columns = []string{"*"}
+	} else {
+		columns = strings.Split(columnsStr, ",")
+		for i := range columns {
+			columns[i] = strings.TrimSpace(columns[i])
 		}
 	}
+
+	// Extract table name (everything after FROM)
+	table := strings.TrimSpace(query[fromStart+4:])
 
 	return &Statement{
 		Type:    StatementTypeSelect,
@@ -104,28 +106,65 @@ func (p *Parser) parseSelect() (*Statement, error) {
 
 // parseInsert parses an INSERT statement
 func (p *Parser) parseInsert() (*Statement, error) {
-	// This is a very basic implementation
-	parts := strings.Fields(p.query)
-	if len(parts) < 6 {
-		return nil, fmt.Errorf("invalid INSERT statement")
+	query := p.query
+
+	// Find the table name
+	tableStart := strings.Index(strings.ToLower(query), "into") + len("into")
+	if tableStart == -1 {
+		return nil, fmt.Errorf("invalid INSERT statement: missing INTO keyword")
+	}
+
+	// Find the opening parenthesis for columns
+	colStart := strings.Index(query[tableStart:], "(")
+	if colStart == -1 {
+		return nil, fmt.Errorf("invalid INSERT statement: missing column list")
 	}
 
 	// Extract table name
-	table := ""
-	for i, part := range parts {
-		if part == "into" && i+1 < len(parts) {
-			table = parts[i+1]
-			break
-		}
+	table := strings.TrimSpace(query[tableStart : tableStart+colStart])
+	fmt.Println("table", table)
+
+	// Find the closing parenthesis for columns
+	colEnd := strings.Index(query[tableStart+colStart:], ")")
+	if colEnd == -1 {
+		return nil, fmt.Errorf("invalid INSERT statement: missing closing parenthesis for column list")
 	}
 
-	// Extract columns and values
-	columns := strings.Split(strings.Trim(parts[3], "()"), ",")
-	values := strings.Split(strings.Trim(parts[5], "()"), ",")
-
+	// Extract columns
+	columnsStr := query[tableStart+colStart+1 : tableStart+colStart+colEnd]
+	columns := strings.Split(columnsStr, ",")
 	for i := range columns {
 		columns[i] = strings.TrimSpace(columns[i])
+	}
+
+	// Find the VALUES keyword
+	valuesStart := strings.Index(strings.ToLower(query), "values")
+	if valuesStart == -1 {
+		return nil, fmt.Errorf("invalid INSERT statement: missing VALUES keyword")
+	}
+
+	// Find the opening parenthesis for values
+	valStart := strings.Index(query[valuesStart:], "(")
+	if valStart == -1 {
+		return nil, fmt.Errorf("invalid INSERT statement: missing value list")
+	}
+
+	// Find the closing parenthesis for values
+	valEnd := strings.Index(query[valuesStart+valStart:], ")")
+	if valEnd == -1 {
+		return nil, fmt.Errorf("invalid INSERT statement: missing closing parenthesis for value list")
+	}
+
+	// Extract values
+	valuesStr := query[valuesStart+valStart+1 : valuesStart+valStart+valEnd]
+	values := strings.Split(valuesStr, ",")
+	for i := range values {
 		values[i] = strings.TrimSpace(values[i])
+	}
+
+	// Verify that the number of columns matches the number of values
+	if len(columns) != len(values) {
+		return nil, fmt.Errorf("number of columns (%d) does not match number of values (%d)", len(columns), len(values))
 	}
 
 	return &Statement{
