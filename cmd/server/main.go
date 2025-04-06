@@ -17,11 +17,11 @@ import (
 )
 
 type Server struct {
-	node      *distribution.Node
-	storage   storage.Engine
-	txns      *transaction.TransactionManager
-	executor  *sql.Executor
-	httpSrv   *http.Server
+	node     *distribution.Node
+	storage  storage.Engine
+	txns     *transaction.TransactionManager
+	executor *sql.Executor
+	httpSrv  *http.Server
 }
 
 func NewServer() (*Server, error) {
@@ -29,7 +29,8 @@ func NewServer() (*Server, error) {
 	node := distribution.NewNode(distribution.NodeID("node1"))
 
 	// Create storage engine (in a real implementation, this would be RocksDB)
-	engine := storage.NewMVCCEngine(&storage.MemoryEngine{})
+	memEngine := storage.NewMemoryEngine()
+	engine := storage.NewMVCCEngine(memEngine)
 
 	// Create transaction manager
 	txns := transaction.NewTransactionManager(engine)
@@ -149,4 +150,4 @@ func main() {
 		log.Printf("Error during shutdown: %v", err)
 	}
 	log.Println("Server stopped")
-} 
+}
